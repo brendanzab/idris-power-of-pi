@@ -1,0 +1,4 @@
+package power_of_pi
+sourcedir = src
+modules = BinaryFormats
+opts = "-p contrib --partial-eval"
