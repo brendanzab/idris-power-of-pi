@@ -58,45 +58,59 @@ char c =
 Parser : Type -> Type
 Parser a = (bits : List Bit) -> Maybe (a, List Bit)
 
-parseChar : Parser Char
-parseChar bits =
-    ?parseChar_rhs
+parseBit : Parser Bit
+parseBit [] = Nothing
+parseBit (bit :: bits) = Just (bit, bits)
 
 parseNat : Parser Nat
 parseNat bits =
-    ?parseNat_rhs
+    Just (go bits 0, [])
+    -- FIXME: this seems wrong - we need to know the size of the integer first!
+    where
+        go : List Bit -> Nat -> Nat
+        go [] acc = acc
+        go (O :: bits) acc = go bits (2 * acc)
+        go (I :: bits) acc = go bits (S (2 * acc))
 
-mutual
-    -- TODO: make this tail-recursive?
-    parseVect : {n : Nat} -> %static (f : Format) -> Parser (Vect n (embed f))
-    parseVect {n = Z} _ bits = Just ([], bits)
-    parseVect {n = (S k)} f bits with (parse f bits)
-        | Nothing = Nothing
-        | Just (x, bits') =
-            parseVect {n = k} f bits'
-                |> map (\(xs, bits'') => (x :: xs, bits''))
+parseChar : Parser Char
+parseChar bits =
+    if length bits < 16 then -- Idris' `Char`s are supposedly 2 bytes wide
+        Nothing
+    else
+        let (headBits, tailBits) = splitAt 16 bits
+        in
+            case parseNat headBits of
+                Just (n, []) => Just (chr (toIntNat n), tailBits)
+                Just (_, _) => Nothing
+                Nothing => Nothing
 
-    ||| Interpret a binary format specification as a parser
-    parse : %static (f : Format) -> Parser (embed f)
-    parse FBad bits = Nothing
-    parse FEnd bits = Just ((), bits)
-    parse FBit (bit :: bits) = Just (bit, bits)
-    parse FChar bits = parseChar bits
-    parse FNat bits = parseNat bits
-    parse (FVect n f) bits = parseVect f bits
-    parse (FPlus f1 f2) bits with (parse f1 bits)
-        | (Just (x, bits')) = Just (Left x, bits')
-        | Nothing with (parse f2 bits)
-            | (Just (y, bits')) = Just (Right y, bits')
-            | Nothing = Nothing
-    parse (FSkip f1 f2) bits with (parse f1 bits)
+
+||| Interpret a binary format specification as a parser
+parse : %static (f : Format) -> Parser (embed f)
+parse FBad bits = Nothing
+parse FEnd bits = Just ((), bits)
+parse FBit bits = parseBit bits
+parse FChar bits = parseChar bits
+parse FNat bits = parseNat bits
+parse (FVect Z f) bits = Just ([], bits)
+parse (FVect (S k) f) bits with (parse f bits)
+    | Nothing = Nothing
+    | Just (x, bits') =
+        parse (FVect k f) bits'
+            |> map (\(xs, bits'') => (x :: xs, bits''))
+parse (FPlus f1 f2) bits with (parse f1 bits)
+    | (Just (x, bits')) = Just (Left x, bits')
+    | Nothing with (parse f2 bits)
+        | (Just (y, bits')) = Just (Right y, bits')
         | Nothing = Nothing
-        | (Just (x, bits')) = parse f2 bits'
-    parse (FRead f1 f2) bits with (parse f1 bits)
+parse (FSkip f1 f2) bits with (parse f1 bits)
+    | Nothing = Nothing
+    | (Just (x, bits')) = parse f2 bits'
+parse (FRead f1 f2) bits with (parse f1 bits)
+    | Nothing = Nothing
+    | (Just (x, bits')) with (parse (f2 x) bits')
         | Nothing = Nothing
-        | (Just (x, bits')) with (parse (f2 x) bits')
-            | Nothing = Nothing
-            | Just (y, bits'') = Just ((x ** y), bits'')
+        | Just (y, bits'') = Just ((x ** y), bits'')
 
 ||| PBM binary format
 pbm : Format
