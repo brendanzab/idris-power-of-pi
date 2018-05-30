@@ -84,33 +84,36 @@ parseChar bits =
                 Just (_, _) => Nothing
                 Nothing => Nothing
 
+mutual
+    parseVect : {n : Nat} -> (f : Format) -> (bits : List Bit) -> Maybe (Vect n (embed f), List Bit)
+    parseVect {n = Z} f bits = Just ([], bits)
+    parseVect {n = (S k)} f bits with (parse f bits)
+        | Nothing = Nothing
+        | Just (x, bits') with (parseVect {n = k} f bits')
+            | Nothing = Nothing
+            | Just (xs, bits'') = Just (x :: xs, bits'')
 
-||| Interpret a binary format specification as a parser
-parse : %static (f : Format) -> Parser (embed f)
-parse FBad bits = Nothing
-parse FEnd bits = Just ((), bits)
-parse FBit bits = parseBit bits
-parse FChar bits = parseChar bits
-parse FNat bits = parseNat bits
-parse (FVect Z f) bits = Just ([], bits)
-parse (FVect (S k) f) bits with (parse f bits)
-    | Nothing = Nothing
-    | Just (x, bits') =
-        parse (FVect k f) bits'
-            |> map (\(xs, bits'') => (x :: xs, bits''))
-parse (FPlus f1 f2) bits with (parse f1 bits)
-    | (Just (x, bits')) = Just (Left x, bits')
-    | Nothing with (parse f2 bits)
-        | (Just (y, bits')) = Just (Right y, bits')
+    ||| Interpret a binary format specification as a parser
+    parse : %static (f : Format) -> Parser (embed f)
+    parse FBad bits = Nothing
+    parse FEnd bits = Just ((), bits)
+    parse FBit bits = parseBit bits
+    parse FChar bits = parseChar bits
+    parse FNat bits = parseNat bits
+    parse (FVect n f) bits = parseVect f bits
+    parse (FPlus f1 f2) bits with (parse f1 bits)
+        | (Just (x, bits')) = Just (Left x, bits')
+        | Nothing with (parse f2 bits)
+            | (Just (y, bits')) = Just (Right y, bits')
+            | Nothing = Nothing
+    parse (FSkip f1 f2) bits with (parse f1 bits)
         | Nothing = Nothing
-parse (FSkip f1 f2) bits with (parse f1 bits)
-    | Nothing = Nothing
-    | (Just (x, bits')) = parse f2 bits'
-parse (FRead f1 f2) bits with (parse f1 bits)
-    | Nothing = Nothing
-    | (Just (x, bits')) with (parse (f2 x) bits')
+        | (Just (x, bits')) = parse f2 bits'
+    parse (FRead f1 f2) bits with (parse f1 bits)
         | Nothing = Nothing
-        | Just (y, bits'') = Just ((x ** y), bits'')
+        | (Just (x, bits')) with (parse (f2 x) bits')
+            | Nothing = Nothing
+            | Just (y, bits'') = Just ((x ** y), bits'')
 
 ||| PBM binary format
 pbm : Format
