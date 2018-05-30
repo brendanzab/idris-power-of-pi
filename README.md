@@ -1,8 +1,8 @@
 # idris-power-of-pi
 
-Parts of [The Power of Pi](the-power-of-pi), implemented in Idris.
+Parts of [The Power of Pi][the-power-of-pi], implemented in Idris.
 
-Also check out [clayrat/the-power-of-pi](clayrat-the-power-of-pi), which is much
+Also check out [clayrat/the-power-of-pi][clayrat-the-power-of-pi], which is much
 more complete and follows the paper more closely!
 
 ```
