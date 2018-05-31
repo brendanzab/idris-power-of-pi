@@ -20,8 +20,12 @@ mutual
         FEnd : Format
         FBit : Format
         FChar : Format
+        FU8 : Format -- TODO: Endianness
         FU16 : Format -- TODO: Endianness
+        FU32 : Format -- TODO: Endianness
+        FS8 : Format -- TODO: Endianness
         FS16 : Format -- TODO: Endianness
+        FS32 : Format -- TODO: Endianness
         FVect : Nat -> Format -> Format
         FPlus : Format -> Format -> Format
         FSkip : Format -> Format -> Format
@@ -33,8 +37,12 @@ mutual
     embed FEnd = Unit
     embed FBit = Bit
     embed FChar = Char
+    embed FU8 = Nat
     embed FU16 = Nat
+    embed FU32 = Nat
+    embed FS8 = ZZ
     embed FS16 = ZZ
+    embed FS32 = ZZ
     embed (FVect n a) = Vect n (embed a)
     embed (FPlus f1 f2) = Either (embed f1) (embed f2)
     embed (FSkip _ f) = embed f
@@ -106,8 +114,12 @@ mutual
     parse FEnd bits = Just ((), bits)
     parse FBit bits = parseBit bits
     parse FChar bits = parseChar bits
+    parse FU8 bits = parseUInt 8 bits
     parse FU16 bits = parseUInt 16 bits
+    parse FU32 bits = parseUInt 32 bits
+    parse FS8 bits = parseSInt 8 bits
     parse FS16 bits = parseSInt 16 bits
+    parse FS32 bits = parseSInt 32 bits
     parse (FVect n f) bits = parseVect f bits
     parse (FPlus f1 f2) bits with (parse f1 bits)
         | (Just (x, bits')) = Just (Left x, bits')
