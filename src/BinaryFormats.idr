@@ -26,9 +26,7 @@ mutual
         FS8 : Format -- TODO: Endianness
         FS16 : Format -- TODO: Endianness
         FS32 : Format -- TODO: Endianness
-        FOffset8 : Format -> Format
-        FOffset16 : Format -> Format
-        FOffset32 : Format -> Format
+        FOffset : Nat -> Format -> Format
         FVect : Nat -> Format -> Format
         FPlus : Format -> Format -> Format
         FSkip : Format -> Format -> Format
@@ -46,9 +44,7 @@ mutual
     embed FS8 = ZZ
     embed FS16 = ZZ
     embed FS32 = ZZ
-    embed (FOffset8 f) = embed f
-    embed (FOffset16 f) = embed f
-    embed (FOffset32 f) = embed f
+    embed (FOffset _ f) = Lazy (Maybe (embed f))
     embed (FVect n a) = Vect n (embed a)
     embed (FPlus f1 f2) = Either (embed f1) (embed f2)
     embed (FSkip _ f) = embed f
@@ -119,13 +115,6 @@ mutual
                 | Just (elem, bits'') =
                     rewrite plusSuccRightSucc k m in go k (elem :: acc) bits''
 
-    parseOffset : Nat -> (f: Format) -> Parser (embed f)
-    parseOffset size f bits with (parseUInt size bits)
-        | Nothing = Nothing
-        | Just (offset, bits') with (tryDrop offset bits')
-            | Nothing = Nothing
-            | Just bits'' = parse f bits''
-
     ||| Interpret a binary format specification as a parser
     parse : %static (f : Format) -> Parser (embed f)
     parse FBad bits = Nothing
@@ -138,9 +127,9 @@ mutual
     parse FS8 bits = parseSInt 8 bits
     parse FS16 bits = parseSInt 16 bits
     parse FS32 bits = parseSInt 32 bits
-    parse (FOffset8 f) bits = parseOffset 8 f bits
-    parse (FOffset16 f) bits = parseOffset 16 f bits
-    parse (FOffset32 f) bits = parseOffset 32 f bits
+    parse (FOffset offset f) bits with (tryDrop offset bits)
+        | Nothing = Nothing
+        | Just bits' = Just (Delay (parse f bits' |> map fst), bits)
     parse (FVect n f) bits = parseVect f bits
     parse (FPlus f1 f2) bits with (parse f1 bits)
         | (Just (x, bits')) = Just (Left x, bits')
