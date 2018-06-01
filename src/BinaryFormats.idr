@@ -110,12 +110,14 @@ parseChar bits =
 
 mutual
     parseVect : {n : Nat} -> (f : Format) -> Parser (Vect n (embed f))
-    parseVect {n = Z} f bits = Just ([], bits)
-    parseVect {n = (S k)} f bits with (parse f bits)
-        | Nothing = Nothing
-        | Just (x, bits') with (parseVect {n = k} f bits')
-            | Nothing = Nothing
-            | Just (xs, bits'') = Just (x :: xs, bits'')
+    parseVect {n} f = rewrite plusCommutative Z n in go n []
+        where
+            go : {m : Nat} -> (n : Nat) -> Vect m (embed f) -> Parser (Vect (n + m) (embed f))
+            go {m} Z acc bits = Just (reverse acc, bits)
+            go {m} (S k) acc bits with (parse f bits)
+                | Nothing = Nothing
+                | Just (elem, bits'') =
+                    rewrite plusSuccRightSucc k m in go k (elem :: acc) bits''
 
     parseOffset : Nat -> (f: Format) -> Parser (embed f)
     parseOffset size f bits with (parseUInt size bits)
