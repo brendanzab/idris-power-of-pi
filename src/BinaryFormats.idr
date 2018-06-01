@@ -26,6 +26,9 @@ mutual
         FS8 : Format -- TODO: Endianness
         FS16 : Format -- TODO: Endianness
         FS32 : Format -- TODO: Endianness
+        FOffset8 : Format -> Format
+        FOffset16 : Format -> Format
+        FOffset32 : Format -> Format
         FVect : Nat -> Format -> Format
         FPlus : Format -> Format -> Format
         FSkip : Format -> Format -> Format
@@ -43,6 +46,9 @@ mutual
     embed FS8 = ZZ
     embed FS16 = ZZ
     embed FS32 = ZZ
+    embed (FOffset8 f) = embed f
+    embed (FOffset16 f) = embed f
+    embed (FOffset32 f) = embed f
     embed (FVect n a) = Vect n (embed a)
     embed (FPlus f1 f2) = Either (embed f1) (embed f2)
     embed (FSkip _ f) = embed f
@@ -73,20 +79,23 @@ parseBit : Parser Bit
 parseBit [] = Nothing
 parseBit (bit :: bits) = Just (bit, bits)
 
+trySplitAt : {a : Type} -> Nat -> List a -> Maybe (List a, List a)
+trySplitAt offset bits =
+    toMaybe (length bits < offset) (splitAt offset bits)
+
+tryDrop : {a : Type} -> Nat -> List a -> Maybe (List a)
+tryDrop offset bits =
+    toMaybe (length bits < offset) (drop offset bits)
+
 parseUInt : Nat -> Parser Nat
 parseUInt size bits =
-    if length bits < size then
-        Nothing
-    else
-        let
-            (headBits, tailBits) = splitAt size bits
-        in
-            Just (go bits 0, tailBits)
-        where
-            go : List Bit -> Nat -> Nat
-            go [] acc = acc
-            go (O :: bits) acc = go bits (2 * acc)
-            go (I :: bits) acc = go bits (S (2 * acc))
+    trySplitAt size bits
+        |> map (\(headBits, tailBits) => (go headBits 0, tailBits))
+    where
+        go : List Bit -> Nat -> Nat
+        go [] acc = acc
+        go (O :: bits) acc = go bits (2 * acc)
+        go (I :: bits) acc = go bits (S (2 * acc))
 
 parseSInt : Nat -> Parser ZZ
 parseSInt Z bits = Just (0, bits)
@@ -100,13 +109,20 @@ parseChar bits =
         |> map (\(n, bits') => (chr (toIntNat n), bits'))
 
 mutual
-    parseVect : {n : Nat} -> (f : Format) -> (bits : List Bit) -> Maybe (Vect n (embed f), List Bit)
+    parseVect : {n : Nat} -> (f : Format) -> Parser (Vect n (embed f))
     parseVect {n = Z} f bits = Just ([], bits)
     parseVect {n = (S k)} f bits with (parse f bits)
         | Nothing = Nothing
         | Just (x, bits') with (parseVect {n = k} f bits')
             | Nothing = Nothing
             | Just (xs, bits'') = Just (x :: xs, bits'')
+
+    parseOffset : Nat -> (f: Format) -> Parser (embed f)
+    parseOffset size f bits with (parseUInt size bits)
+        | Nothing = Nothing
+        | Just (offset, bits') with (tryDrop offset bits')
+            | Nothing = Nothing
+            | Just bits'' = parse f bits''
 
     ||| Interpret a binary format specification as a parser
     parse : %static (f : Format) -> Parser (embed f)
@@ -120,6 +136,9 @@ mutual
     parse FS8 bits = parseSInt 8 bits
     parse FS16 bits = parseSInt 16 bits
     parse FS32 bits = parseSInt 32 bits
+    parse (FOffset8 f) bits = parseOffset 8 f bits
+    parse (FOffset16 f) bits = parseOffset 16 f bits
+    parse (FOffset32 f) bits = parseOffset 32 f bits
     parse (FVect n f) bits = parseVect f bits
     parse (FPlus f1 f2) bits with (parse f1 bits)
         | (Just (x, bits')) = Just (Left x, bits')
@@ -151,3 +170,11 @@ pbm = do
 ||| Parse PBM data from a string of bits
 parsePbm : Parser (embed BinaryFormats.pbm)
 parsePbm = parse pbm
+
+
+test : Format
+test = do
+    x <- FBit
+    case x of
+        O => FU8
+        I => FS8
