@@ -26,7 +26,8 @@ mutual
         FS8 : Format -- TODO: Endianness
         FS16 : Format -- TODO: Endianness
         FS32 : Format -- TODO: Endianness
-        FOffset : Nat -> Format -> Format
+        FRef : Format
+        FPtr : Nat -> List Bit -> Format -> Format
         FVect : Nat -> Format -> Format
         FPlus : Format -> Format -> Format
         FSkip : Format -> Format -> Format
@@ -44,7 +45,8 @@ mutual
     embed FS8 = ZZ
     embed FS16 = ZZ
     embed FS32 = ZZ
-    embed (FOffset _ f) = Lazy (Maybe (embed f))
+    embed FRef = List Bit
+    embed (FPtr _ _ f) = Lazy (Maybe (embed f))
     embed (FVect n a) = Vect n (embed a)
     embed (FPlus f1 f2) = Either (embed f1) (embed f2)
     embed (FSkip _ f) = embed f
@@ -116,7 +118,7 @@ mutual
                     rewrite plusSuccRightSucc k m in go k (elem :: acc) bits''
 
     ||| Interpret a binary format specification as a parser
-    parse : %static (f : Format) -> Parser (embed f)
+    parse : (f : Format) -> Parser (embed f)
     parse FBad bits = Nothing
     parse FEnd bits = Just ((), bits)
     parse FBit bits = parseBit bits
@@ -127,9 +129,10 @@ mutual
     parse FS8 bits = parseSInt 8 bits
     parse FS16 bits = parseSInt 16 bits
     parse FS32 bits = parseSInt 32 bits
-    parse (FOffset offset f) bits with (tryDrop offset bits)
+    parse FRef bits = Just (bits, bits)
+    parse (FPtr offset refBits f) bits with (tryDrop offset refBits)
         | Nothing = Nothing
-        | Just bits' = Just (Delay (parse f bits' |> map fst), bits)
+        | Just refBits' = Just (Delay (parse f refBits' |> map fst), bits)
     parse (FVect n f) bits = parseVect f bits
     parse (FPlus f1 f2) bits with (parse f1 bits)
         | (Just (x, bits')) = Just (Left x, bits')
@@ -162,10 +165,22 @@ pbm = do
 parsePbm : Parser (embed BinaryFormats.pbm)
 parsePbm = parse pbm
 
-
 test : Format
 test = do
     x <- FBit
     case x of
         O => FU8
         I => FS8
+
+testPtr : Format
+testPtr = do
+    start <- FRef
+    offset <- FU16
+    ptr <- FPtr offset start <| do
+        namesLen <- FU16
+        names <- FVect namesLen <| do
+            nameLen <- FU16
+            name <- FVect nameLen FChar
+            FEnd
+        FEnd
+    FEnd
