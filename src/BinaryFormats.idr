@@ -19,11 +19,12 @@ mutual
         FBad : Format
         FEnd : Format
         FBit : Format
+        FByte : Format
         FChar : Format
-        FU8 : Format -- TODO: Endianness
+        FU8 : Format
         FU16 : Format -- TODO: Endianness
         FU32 : Format -- TODO: Endianness
-        FS8 : Format -- TODO: Endianness
+        FS8 : Format
         FS16 : Format -- TODO: Endianness
         FS32 : Format -- TODO: Endianness
         FRef : Format
@@ -38,6 +39,7 @@ mutual
     embed FBad = Void
     embed FEnd = Unit
     embed FBit = Bit
+    embed FByte = Bits8
     embed FChar = Char
     embed FU8 = Nat
     embed FU16 = Nat
@@ -85,16 +87,20 @@ tryDrop : {a : Type} -> Nat -> List a -> Maybe (List a)
 tryDrop offset bits =
     toMaybe (length bits < offset) (drop offset bits)
 
-parseUInt : Nat -> Parser Nat
-parseUInt size bits =
+parseUNum : {a : Type} -> Num a => Nat -> Parser a
+parseUNum size bits =
     trySplitAt size bits
         |> map (\(headBits, tailBits) => (go headBits 0, tailBits))
     where
-        go : List Bit -> Nat -> Nat
+        go : {a : Type} -> Num a => List Bit -> a -> a
         go [] acc = acc
         go (O :: bits) acc = go bits (2 * acc)
-        go (I :: bits) acc = go bits (S (2 * acc))
+        go (I :: bits) acc = go bits (1 + (2 * acc))
 
+parseUInt : Nat -> Parser Nat
+parseUInt = parseUNum
+
+-- FXME: Two's complement?
 parseSInt : Nat -> Parser ZZ
 parseSInt Z bits = Just (0, bits)
 parseSInt (S _) [] = Nothing
@@ -122,6 +128,7 @@ mutual
     parse FBad bits = Nothing
     parse FEnd bits = Just ((), bits)
     parse FBit bits = parseBit bits
+    parse FByte bits = parseUNum 8 bits
     parse FChar bits = parseChar bits
     parse FU8 bits = parseUInt 8 bits
     parse FU16 bits = parseUInt 16 bits
