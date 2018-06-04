@@ -4,14 +4,10 @@ import Control.Pipeline
 import Data.Vect
 import Data.ZZ
 
-%default total
+import BinaryFormats.Data.Bit
+import BinaryFormats.Data.List
 
-||| A binary digit (either 0 or 1)
-data Bit : Type where
-    ||| The 0 digit
-    O : Bit
-    ||| The 1 digit
-    I : Bit
+%default total
 
 mutual
     ||| A universe of binary data formats
@@ -78,14 +74,6 @@ Parser a = (bits : List Bit) -> Maybe (a, List Bit)
 parseBit : Parser Bit
 parseBit [] = Nothing
 parseBit (bit :: bits) = Just (bit, bits)
-
-trySplitAt : {a : Type} -> Nat -> List a -> Maybe (List a, List a)
-trySplitAt offset bits =
-    toMaybe (length bits < offset) (splitAt offset bits)
-
-tryDrop : {a : Type} -> Nat -> List a -> Maybe (List a)
-tryDrop offset bits =
-    toMaybe (length bits < offset) (drop offset bits)
 
 parseUNum : {a : Type} -> Num a => Nat -> Parser a
 parseUNum size bits =
